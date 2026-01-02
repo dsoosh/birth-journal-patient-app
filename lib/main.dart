@@ -171,18 +171,13 @@ class _AppState extends State<App> with WidgetsBindingObserver {
     return Consumer<AuthProvider>(
       builder: (context, auth, _) {
         // Flow:
-        // 1. Not authenticated & not claimed -> JoinScreen (pair with midwife)
-        // 2. Authenticated & claimed but no PIN -> PinSetupScreen
-        // 3. Has PIN but session expired -> PinEntryScreen
+        // 1. No PIN set up -> PinSetupScreen (first app launch)
+        // 2. Has PIN but session expired -> PinEntryScreen
+        // 3. No case -> JoinScreen (create or join case)
         // 4. Everything OK -> HomeScreen
 
-        if (!auth.isAuthenticated || !auth.claimed) {
-          // Need to pair with midwife first
-          return const JoinScreen();
-        }
-
         if (!_hasPin) {
-          // Need to set up PIN after pairing
+          // Need to set up PIN on first launch
           return PinSetupScreen(storage: widget.storage, onPinSet: _onPinSet);
         }
 
@@ -192,6 +187,11 @@ class _AppState extends State<App> with WidgetsBindingObserver {
             storage: widget.storage,
             onPinVerified: _onPinVerified,
           );
+        }
+
+        if (!auth.isAuthenticated) {
+          // Need to create or join a case
+          return const JoinScreen();
         }
 
         // All good, show home
