@@ -31,14 +31,14 @@ jobs:
           flutter test --coverage --reporter expanded || true
       
       - name: Upload coverage to Codecov
-        uses: codecov/codecov-action@v3
+        uses: codecov/codecov-action@v4
         with:
           directory: ./coverage
           flags: flutter
           fail_ci_if_error: false
       
       - name: Upload coverage reports
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         if: always()
         with:
           name: coverage-report
@@ -87,7 +87,7 @@ jobs:
         run: flutter build apk --debug --dart-define API_BASE_URL=https://api.example.com/api/v1
       
       - name: Upload APK
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         if: always()
         with:
           name: app-debug.apk
@@ -113,7 +113,7 @@ jobs:
         run: flutter build web --dart-define API_BASE_URL=https://api.example.com/api/v1
       
       - name: Upload Web Build
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         if: always()
         with:
           name: web-build
