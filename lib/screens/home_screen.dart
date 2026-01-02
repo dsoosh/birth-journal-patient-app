@@ -258,6 +258,12 @@ class _HomeScreenState extends State<HomeScreen> {
               ),
             ],
           ),
+          IconButton(
+            icon: const Icon(Icons.settings),
+            onPressed: () {
+              Navigator.of(context).pushNamed('/settings');
+            },
+          ),
         ],
       ),
       body: isClosed

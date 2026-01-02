@@ -12,6 +12,7 @@ import 'screens/home_screen.dart';
 import 'screens/join_screen.dart';
 import 'screens/pin_entry_screen.dart';
 import 'screens/pin_setup_screen.dart';
+import 'screens/settings_screen.dart';
 import 'services/api_client.dart';
 import 'services/event_queue.dart';
 import 'services/secure_storage_service.dart';
@@ -150,6 +151,9 @@ class _AppState extends State<App> with WidgetsBindingObserver {
                   colorScheme: ColorScheme.fromSeed(seedColor: Colors.indigo),
                   useMaterial3: true,
                 ),
+                routes: {
+                  '/settings': (_) => const SettingsScreen(),
+                },
                 home: _buildHome(snapshot),
               );
             },
