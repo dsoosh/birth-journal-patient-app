@@ -43,7 +43,6 @@ dependencies:
   qr_flutter: ^4.1.0
   web_socket_channel: ^2.4.1
   cupertino_icons: ^1.0.8
-  intl: ^0.20.0
   crypto: ^3.0.3
 
 dev_dependencies:
