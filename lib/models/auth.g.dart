@@ -44,6 +44,9 @@ CaseStatus _$CaseStatusFromJson(Map<String, dynamic> json) => CaseStatus(
       caseId: json['case_id'] as String,
       status: json['status'] as String,
       claimed: json['claimed'] as bool,
+      laborActive: json['labor_active'] as bool? ?? false,
+      postpartumActive: json['postpartum_active'] as bool? ?? false,
+      closedAt: json['closed_at'] as String?,
     );
 
 Map<String, dynamic> _$CaseStatusToJson(CaseStatus instance) =>
@@ -51,4 +54,7 @@ Map<String, dynamic> _$CaseStatusToJson(CaseStatus instance) =>
       'case_id': instance.caseId,
       'status': instance.status,
       'claimed': instance.claimed,
+      'labor_active': instance.laborActive,
+      'postpartum_active': instance.postpartumActive,
+      'closed_at': instance.closedAt,
     };

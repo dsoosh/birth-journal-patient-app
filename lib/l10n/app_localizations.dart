@@ -33,19 +33,22 @@ class AppLocalizations {
   String get startContraction => _t('startContraction');
   String get stopContraction => _t('stopContraction');
   String get contractionRecorded => _t('contractionRecorded');
-  String get startContractionToSeeTimeline => _t('startContractionToSeeTimeline');
+  String get startContractionToSeeTimeline =>
+      _t('startContractionToSeeTimeline');
 
   // Time periods
   String get now => _t('now');
   String get hoursAgo => _t('hoursAgo');
-  String inLastHours(int hours) => _t('inLastHours').replaceAll('{hours}', hours.toString());
+  String inLastHours(int hours) =>
+      _t('inLastHours').replaceAll('{hours}', hours.toString());
   String hoursAbbrev(int hours) => '${hours}h';
 
   // Vital stats
   String get avgDuration => _t('avgDuration');
   String get avgGap => _t('avgGap');
   String get frequency => _t('frequency');
-  String inPeriod(String period) => _t('inPeriod').replaceAll('{period}', period);
+  String inPeriod(String period) =>
+      _t('inPeriod').replaceAll('{period}', period);
 
   // Events
   String get otherEvents => _t('otherEvents');
@@ -61,6 +64,33 @@ class AppLocalizations {
   String get nausea => _t('nausea');
   String get visionIssues => _t('visionIssues');
   String get feverChills => _t('feverChills');
+  String get bellyLowering => _t('bellyLowering');
+
+  // Postpartum symptoms
+  String get heavyBleeding => _t('heavyBleeding');
+  String get breastfeedingIssues => _t('breastfeedingIssues');
+  String get moodChanges => _t('moodChanges');
+  String get woundPain => _t('woundPain');
+  String get legPainSwelling => _t('legPainSwelling');
+  String get urinationIssues => _t('urinationIssues');
+
+  // Mode labels
+  String get laborMode => _t('laborMode');
+  String get postpartumMode => _t('postpartumMode');
+  String get reportPostpartumSymptoms => _t('reportPostpartumSymptoms');
+
+  // Midwife feedback
+  String get midwifeFeedback => _t('midwifeFeedback');
+  String get noFeedbackYet => _t('noFeedbackYet');
+  String get acknowledged => _t('acknowledged');
+  String get resolved => _t('resolved');
+  String get pendingReview => _t('pendingReview');
+  String get midwifeReviewed => _t('midwifeReviewed');
+  String get midwifeResolved => _t('midwifeResolved');
+  String get yourReportSeen => _t('yourReportSeen');
+  String get midwifeNotes => _t('midwifeNotes');
+  String get noNotesYet => _t('noNotesYet');
+  String get fromMidwife => _t('fromMidwife');
 
   // Labor events
   String get watersHaveBroken => _t('watersHaveBroken');
@@ -88,10 +118,13 @@ class AppLocalizations {
   String get enterPinDescription => _t('enterPinDescription');
   String get incorrectPin => _t('incorrectPin');
   String get tooManyAttempts => _t('tooManyAttempts');
-  String attemptsRemaining(int count) => _t('attemptsRemaining').replaceAll('{count}', count.toString());
+  String attemptsRemaining(int count) =>
+      _t('attemptsRemaining').replaceAll('{count}', count.toString());
 
   String _t(String key) {
-    return _translations[language]?[key] ?? _translations[AppLanguage.en]![key] ?? key;
+    return _translations[language]?[key] ??
+        _translations[AppLanguage.en]![key] ??
+        key;
   }
 
   static final Map<AppLanguage, Map<String, String>> _translations = {
@@ -106,32 +139,33 @@ class AppLocalizations {
       'language': 'Language',
       'english': 'English',
       'polish': 'Polski',
-      
+
       // Contractions
       'contractions': 'Contractions',
       'noContractionsInPeriod': 'No contractions in this period',
       'startContraction': 'START CONTRACTION',
       'stopContraction': 'STOP CONTRACTION',
       'contractionRecorded': 'Contraction recorded',
-      'startContractionToSeeTimeline': 'Start a contraction to see the timeline',
-      
+      'startContractionToSeeTimeline':
+          'Start a contraction to see the timeline',
+
       // Time
       'now': 'now',
       'hoursAgo': 'h ago',
       'inLastHours': 'in last {hours}h',
-      
+
       // Stats
       'avgDuration': 'Avg Duration',
       'avgGap': 'Avg Gap',
       'frequency': 'Frequency',
       'inPeriod': 'in {period}',
-      
+
       // Events
       'otherEvents': 'Other Events',
       'noOtherEvents': 'No other events',
       'symptomReported': 'Symptom reported to midwife',
       'reportSymptomsToMidwife': 'Report symptoms to your midwife',
-      
+
       // Symptoms
       'watersBreaking': 'Waters breaking',
       'bleeding': 'Bleeding',
@@ -140,7 +174,34 @@ class AppLocalizations {
       'nausea': 'Nausea',
       'visionIssues': 'Vision issues',
       'feverChills': 'Fever/chills',
-      
+      'bellyLowering': 'Belly lowering',
+
+      // Postpartum symptoms
+      'heavyBleeding': 'Heavy bleeding',
+      'breastfeedingIssues': 'Breastfeeding issues',
+      'moodChanges': 'Mood changes',
+      'woundPain': 'Wound pain',
+      'legPainSwelling': 'Leg pain/swelling',
+      'urinationIssues': 'Urination issues',
+
+      // Mode labels
+      'laborMode': 'Labor',
+      'postpartumMode': 'Postpartum',
+      'reportPostpartumSymptoms': 'Report postpartum symptoms',
+
+      // Midwife feedback
+      'midwifeFeedback': 'Midwife Feedback',
+      'noFeedbackYet': 'No feedback yet',
+      'acknowledged': 'Acknowledged',
+      'resolved': 'Resolved',
+      'pendingReview': 'Pending review',
+      'midwifeReviewed': 'Your midwife has reviewed this',
+      'midwifeResolved': 'Your midwife has resolved this',
+      'yourReportSeen': 'Your report has been seen',
+      'midwifeNotes': 'Notes from Midwife',
+      'noNotesYet': 'No notes from your midwife yet',
+      'fromMidwife': 'From your midwife',
+
       // Labor events
       'watersHaveBroken': 'Waters have broken',
       'bleedingReported': 'Bleeding reported',
@@ -150,19 +211,20 @@ class AppLocalizations {
       'headacheVisionIssues': 'Headache/vision issues reported',
       'feverChillsReported': 'Fever or chills reported',
       'laborEventReported': 'Labor event reported',
-      
+
       // Status
       'connected': 'Connected',
       'pending': 'pending',
       'syncNow': 'Sync now',
       'syncFailed': 'Sync failed',
       'caseLabel': 'Case',
-      
+
       // PIN
       'createPin': 'Create PIN',
       'confirmPin': 'Confirm your PIN',
       'createPinDescription': 'Create a 4-digit PIN to secure your data',
-      'pinSecurityNote': 'This PIN protects access to your birth journal. Keep it safe and do not share it.',
+      'pinSecurityNote':
+          'This PIN protects access to your birth journal. Keep it safe and do not share it.',
       'enterPin': 'Enter PIN',
       'enterPinDescription': 'Enter your 4-digit PIN to access the app',
       'incorrectPin': 'Incorrect PIN',
@@ -180,32 +242,33 @@ class AppLocalizations {
       'language': 'Język',
       'english': 'English',
       'polish': 'Polski',
-      
+
       // Contractions
       'contractions': 'Skurcze',
       'noContractionsInPeriod': 'Brak skurczów w tym okresie',
       'startContraction': 'ROZPOCZNIJ SKURCZ',
       'stopContraction': 'ZAKOŃCZ SKURCZ',
       'contractionRecorded': 'Skurcz zapisany',
-      'startContractionToSeeTimeline': 'Rozpocznij skurcz, aby zobaczyć oś czasu',
-      
+      'startContractionToSeeTimeline':
+          'Rozpocznij skurcz, aby zobaczyć oś czasu',
+
       // Time
       'now': 'teraz',
       'hoursAgo': 'h temu',
       'inLastHours': 'w ostatnich {hours}h',
-      
+
       // Stats
       'avgDuration': 'Śr. czas',
       'avgGap': 'Śr. przerwa',
       'frequency': 'Częstość',
       'inPeriod': 'w {period}',
-      
+
       // Events
       'otherEvents': 'Inne zdarzenia',
       'noOtherEvents': 'Brak innych zdarzeń',
       'symptomReported': 'Objaw zgłoszony położnej',
       'reportSymptomsToMidwife': 'Zgłoś objawy położnej',
-      
+
       // Symptoms
       'watersBreaking': 'Odejście wód',
       'bleeding': 'Krwawienie',
@@ -214,7 +277,34 @@ class AppLocalizations {
       'nausea': 'Nudności',
       'visionIssues': 'Problemy ze wzrokiem',
       'feverChills': 'Gorączka/dreszcze',
-      
+      'bellyLowering': 'Obniżenie brzucha',
+
+      // Postpartum symptoms
+      'heavyBleeding': 'Obfite krwawienie',
+      'breastfeedingIssues': 'Problemy z karmieniem',
+      'moodChanges': 'Zmiany nastroju',
+      'woundPain': 'Ból w miejscu rany',
+      'legPainSwelling': 'Ból/obrzęk nóg',
+      'urinationIssues': 'Problemy z oddawaniem moczu',
+
+      // Mode labels
+      'laborMode': 'Poród',
+      'postpartumMode': 'Połóg',
+      'reportPostpartumSymptoms': 'Zgłoś objawy połogowe',
+
+      // Midwife feedback
+      'midwifeFeedback': 'Odpowiedź położnej',
+      'noFeedbackYet': 'Brak odpowiedzi',
+      'acknowledged': 'Przyjęto',
+      'resolved': 'Rozwiązano',
+      'pendingReview': 'Oczekuje na przegląd',
+      'midwifeReviewed': 'Twoja położna przejrzała to zgłoszenie',
+      'midwifeResolved': 'Twoja położna rozwiązała tę sprawę',
+      'yourReportSeen': 'Twoje zgłoszenie zostało przeczytane',
+      'midwifeNotes': 'Notatki od położnej',
+      'noNotesYet': 'Brak notatek od położnej',
+      'fromMidwife': 'Od Twojej położnej',
+
       // Labor events
       'watersHaveBroken': 'Odeszły wody płodowe',
       'bleedingReported': 'Zgłoszono krwawienie',
@@ -224,21 +314,24 @@ class AppLocalizations {
       'headacheVisionIssues': 'Zgłoszono ból głowy/problemy ze wzrokiem',
       'feverChillsReported': 'Zgłoszono gorączkę lub dreszcze',
       'laborEventReported': 'Zgłoszono zdarzenie porodowe',
-      
+
       // Status
       'connected': 'Połączono',
       'pending': 'oczekuje',
       'syncNow': 'Synchronizuj',
       'syncFailed': 'Synchronizacja nieudana',
       'caseLabel': 'Przypadek',
-      
+
       // PIN
       'createPin': 'Utwórz PIN',
       'confirmPin': 'Potwierdź PIN',
-      'createPinDescription': 'Utwórz 4-cyfrowy PIN, aby zabezpieczyć swoje dane',
-      'pinSecurityNote': 'Ten PIN chroni dostęp do Twojego dziennika porodu. Zachowaj go w bezpiecznym miejscu.',
+      'createPinDescription':
+          'Utwórz 4-cyfrowy PIN, aby zabezpieczyć swoje dane',
+      'pinSecurityNote':
+          'Ten PIN chroni dostęp do Twojego dziennika porodu. Zachowaj go w bezpiecznym miejscu.',
       'enterPin': 'Wprowadź PIN',
-      'enterPinDescription': 'Wprowadź 4-cyfrowy PIN, aby uzyskać dostęp do aplikacji',
+      'enterPinDescription':
+          'Wprowadź 4-cyfrowy PIN, aby uzyskać dostęp do aplikacji',
       'incorrectPin': 'Nieprawidłowy PIN',
       'tooManyAttempts': 'Zbyt wiele nieudanych prób',
       'attemptsRemaining': 'Pozostało prób: {count}',
@@ -246,7 +339,8 @@ class AppLocalizations {
   };
 }
 
-class _AppLocalizationsDelegate extends LocalizationsDelegate<AppLocalizations> {
+class _AppLocalizationsDelegate
+    extends LocalizationsDelegate<AppLocalizations> {
   const _AppLocalizationsDelegate();
 
   @override

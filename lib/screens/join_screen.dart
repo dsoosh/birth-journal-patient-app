@@ -8,7 +8,9 @@ import '../providers/auth_provider.dart';
 import 'home_screen.dart';
 
 class JoinScreen extends StatefulWidget {
-  const JoinScreen({super.key});
+  final bool isAddingCase;
+
+  const JoinScreen({super.key, this.isAddingCase = false});
 
   @override
   State<JoinScreen> createState() => _JoinScreenState();
@@ -16,6 +18,9 @@ class JoinScreen extends StatefulWidget {
 
 class _JoinScreenState extends State<JoinScreen> {
   Timer? _statusTimer;
+  String? _newJoinCode;
+  String? _newCaseId;
+  bool _isPairing = false;
 
   @override
   void initState() {
@@ -33,10 +38,24 @@ class _JoinScreenState extends State<JoinScreen> {
 
   Future<void> _initiateIfNeeded() async {
     final auth = context.read<AuthProvider>();
-    if (auth.joinCode == null) {
+    
+    if (widget.isAddingCase) {
+      // Always initiate a new case when adding
+      setState(() => _isPairing = true);
+      final success = await auth.initiateCase();
+      if (success && mounted) {
+        setState(() {
+          _newJoinCode = auth.joinCode;
+          _newCaseId = auth.caseId;
+        });
+        _startStatusPolling();
+      }
+    } else if (auth.joinCode == null) {
       await auth.initiateCase();
-    }
-    if (mounted && !auth.claimed) {
+      if (mounted && !auth.claimed) {
+        _startStatusPolling();
+      }
+    } else if (!auth.claimed) {
       _startStatusPolling();
     }
   }
@@ -47,9 +66,14 @@ class _JoinScreenState extends State<JoinScreen> {
       await auth.checkClaimed();
       if (auth.claimed && mounted) {
         timer.cancel();
-        Navigator.of(context).pushReplacement(
-          MaterialPageRoute(builder: (_) => const HomeScreen()),
-        );
+        if (widget.isAddingCase) {
+          // Go back to home screen after adding new case
+          Navigator.of(context).pop();
+        } else {
+          Navigator.of(context).pushReplacement(
+            MaterialPageRoute(builder: (_) => const HomeScreen()),
+          );
+        }
       }
     });
   }
@@ -57,7 +81,15 @@ class _JoinScreenState extends State<JoinScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('Pair with your midwife')),
+      appBar: AppBar(
+        title: Text(widget.isAddingCase ? 'Add New Case' : 'Pair with your midwife'),
+        leading: widget.isAddingCase
+            ? IconButton(
+                icon: const Icon(Icons.close),
+                onPressed: () => Navigator.of(context).pop(),
+              )
+            : null,
+      ),
       body: Consumer<AuthProvider>(
         builder: (context, auth, _) {
           if (auth.isLoading && auth.joinCode == null) {

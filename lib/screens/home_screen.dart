@@ -1,14 +1,18 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
-import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
+import 'package:provider/provider.dart';
 
 import '../l10n/app_localizations.dart';
 import '../providers/auth_provider.dart';
+import '../providers/events_provider.dart';
 import '../providers/sync_provider.dart';
 import '../providers/websocket_provider.dart';
 import 'join_screen.dart';
+
+// Re-export MidwifeFeedback for use in widget
+export '../providers/events_provider.dart' show MidwifeFeedback;
 
 class _SymptomButton {
   final IconData icon;
@@ -57,13 +61,21 @@ class _HomeScreenState extends State<HomeScreen> {
   @override
   void initState() {
     super.initState();
-    // Connect to WebSocket when home screen is opened
+    // Connect to WebSocket and fetch events when home screen is opened
     Future.microtask(() async {
       final auth = context.read<AuthProvider>();
       final ws = context.read<WebSocketProvider>();
+      final events = context.read<EventsProvider>();
 
       if (auth.isAuthenticated && auth.token != null && auth.caseId != null) {
+        // Set up callback to add new events from WebSocket
+        ws.onNewEvent = (event) {
+          events.addEvent(event);
+        };
+        
         await ws.connect(auth.caseId!, auth.token!);
+        // Fetch existing events to show feedback
+        await events.fetchEvents(auth.caseId!);
       }
     });
   }
@@ -149,11 +161,86 @@ class _HomeScreenState extends State<HomeScreen> {
       return const JoinScreen();
     }
 
+    // Disable UI if case is closed
+    final isClosed = auth.isClosed;
+
     return Scaffold(
       appBar: AppBar(
         title: Text(AppLocalizations.of(context).appTitle),
         backgroundColor: Theme.of(context).colorScheme.inversePrimary,
         actions: [
+          // Case switcher (shows when multiple cases exist)
+          if (auth.cases.length > 1 || auth.cases.isNotEmpty)
+            PopupMenuButton<String>(
+              icon: const Icon(Icons.swap_horiz),
+              tooltip: 'Switch case',
+              onSelected: (value) async {
+                if (value == 'add_new') {
+                  Navigator.of(context).push(
+                    MaterialPageRoute(builder: (_) => const JoinScreen(isAddingCase: true)),
+                  );
+                } else {
+                  await auth.switchToCase(value);
+                  // Reconnect WebSocket for new case
+                  final wsProvider = context.read<WebSocketProvider>();
+                  final eventsProvider = context.read<EventsProvider>();
+                  wsProvider.disconnect();
+                  if (auth.token != null && auth.caseId != null) {
+                    wsProvider.onNewEvent = (event) {
+                      eventsProvider.addEvent(event);
+                    };
+                    await wsProvider.connect(auth.caseId!, auth.token!);
+                    await eventsProvider.fetchEvents(auth.caseId!);
+                  }
+                }
+              },
+              itemBuilder: (context) => [
+                ...auth.cases.map((caseInfo) => PopupMenuItem<String>(
+                  value: caseInfo.caseId,
+                  child: Row(
+                    children: [
+                      Icon(
+                        caseInfo.caseId == auth.caseId
+                            ? Icons.check_circle
+                            : Icons.circle_outlined,
+                        size: 18,
+                        color: caseInfo.isClosed
+                            ? Colors.grey
+                            : (caseInfo.caseId == auth.caseId
+                                ? Colors.green
+                                : Colors.grey),
+                      ),
+                      const SizedBox(width: 8),
+                      Text(
+                        'Case ${caseInfo.shortId}...',
+                        style: TextStyle(
+                          fontFamily: 'monospace',
+                          color: caseInfo.isClosed ? Colors.grey : null,
+                          decoration: caseInfo.isClosed
+                              ? TextDecoration.lineThrough
+                              : null,
+                        ),
+                      ),
+                      if (caseInfo.isClosed) ...[
+                        const SizedBox(width: 4),
+                        const Icon(Icons.lock, size: 14, color: Colors.grey),
+                      ],
+                    ],
+                  ),
+                )),
+                const PopupMenuDivider(),
+                const PopupMenuItem<String>(
+                  value: 'add_new',
+                  child: Row(
+                    children: [
+                      Icon(Icons.add_circle_outline, size: 18),
+                      SizedBox(width: 8),
+                      Text('Add new case'),
+                    ],
+                  ),
+                ),
+              ],
+            ),
           // Language selector
           PopupMenuButton<AppLanguage>(
             icon: const Icon(Icons.language),
@@ -171,21 +258,11 @@ class _HomeScreenState extends State<HomeScreen> {
               ),
             ],
           ),
-          IconButton(
-            icon: const Icon(Icons.logout),
-            onPressed: () async {
-              await auth.logout();
-              if (context.mounted) {
-                Navigator.of(context).pushAndRemoveUntil(
-                  MaterialPageRoute(builder: (_) => const JoinScreen()),
-                  (_) => false,
-                );
-              }
-            },
-          ),
         ],
       ),
-      body: SafeArea(
+      body: isClosed
+          ? _buildClosedCaseBody(context, auth)
+          : SafeArea(
         child: SingleChildScrollView(
           padding: const EdgeInsets.all(16),
           child: Column(
@@ -255,29 +332,118 @@ class _HomeScreenState extends State<HomeScreen> {
                 ),
               const SizedBox(height: 16),
 
-              // Contraction Timer Button
-              _buildContractionButton(auth.caseId!, sync.isSyncing),
+              // Contraction Timer Button - only show in labor mode
+              if (!auth.postpartumActive) ...[
+                _buildContractionButton(auth.caseId!, sync.isSyncing),
 
-              const SizedBox(height: 16),
-
-              // Contractions Timeline
-              if (_contractions.isNotEmpty) ...[
-                _buildContractionsTimeline(),
                 const SizedBox(height: 16),
+
+                // Contractions Timeline
+                if (_contractions.isNotEmpty) ...[
+                  _buildContractionsTimeline(),
+                  const SizedBox(height: 16),
+                ],
               ],
 
               const Divider(),
               const SizedBox(height: 16),
 
-              // Section title
-              const Text(
-                'Report symptoms to your midwife',
-                style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+              // Section title - changes based on mode
+              Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      auth.postpartumActive
+                          ? AppLocalizations.of(
+                              context,
+                            ).reportPostpartumSymptoms
+                          : AppLocalizations.of(
+                              context,
+                            ).reportSymptomsToMidwife,
+                      style: const TextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ),
+                  if (auth.postpartumActive)
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 10,
+                        vertical: 6,
+                      ),
+                      decoration: BoxDecoration(
+                        color: Colors.teal.shade100,
+                        borderRadius: BorderRadius.circular(16),
+                        border: Border.all(color: Colors.teal.shade300),
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(
+                            Icons.child_friendly,
+                            size: 14,
+                            color: Colors.teal.shade700,
+                          ),
+                          const SizedBox(width: 4),
+                          Text(
+                            AppLocalizations.of(context).postpartumMode,
+                            style: TextStyle(
+                              fontSize: 12,
+                              color: Colors.teal.shade800,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                        ],
+                      ),
+                    )
+                  else if (auth.laborActive)
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 10,
+                        vertical: 6,
+                      ),
+                      decoration: BoxDecoration(
+                        color: Colors.purple.shade100,
+                        borderRadius: BorderRadius.circular(16),
+                        border: Border.all(color: Colors.purple.shade300),
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(
+                            Icons.pregnant_woman,
+                            size: 14,
+                            color: Colors.purple.shade700,
+                          ),
+                          const SizedBox(width: 4),
+                          Text(
+                            AppLocalizations.of(context).laborMode,
+                            style: TextStyle(
+                              fontSize: 12,
+                              color: Colors.purple.shade800,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                ],
               ),
               const SizedBox(height: 16),
 
               // Symptom buttons in 2 columns
               _buildSymptomGrid(context, auth.caseId!, sync.isSyncing),
+
+              const SizedBox(height: 24),
+
+              // Midwife Feedback Section
+              _buildMidwifeFeedbackSection(context),
+
+              const SizedBox(height: 24),
+
+              // Midwife Notes Section
+              _buildMidwifeNotesSection(context),
 
               const SizedBox(height: 24),
 
@@ -297,6 +463,82 @@ class _HomeScreenState extends State<HomeScreen> {
                 style: ElevatedButton.styleFrom(
                   padding: const EdgeInsets.symmetric(vertical: 16),
                 ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildClosedCaseBody(BuildContext context, AuthProvider auth) {
+    return SafeArea(
+      child: Center(
+        child: Padding(
+          padding: const EdgeInsets.all(32),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(
+                Icons.lock_outline,
+                size: 80,
+                color: Colors.grey[400],
+              ),
+              const SizedBox(height: 24),
+              Text(
+                'Case Closed',
+                style: TextStyle(
+                  fontSize: 24,
+                  fontWeight: FontWeight.bold,
+                  color: Colors.grey[700],
+                ),
+              ),
+              const SizedBox(height: 12),
+              Text(
+                'This case has been closed by your midwife. Thank you for using Birth Journal!',
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  fontSize: 16,
+                  color: Colors.grey[600],
+                ),
+              ),
+              const SizedBox(height: 8),
+              Text(
+                'Case: ${auth.caseId?.substring(0, 8) ?? "Unknown"}...',
+                style: TextStyle(
+                  fontSize: 12,
+                  color: Colors.grey[500],
+                  fontFamily: 'monospace',
+                ),
+              ),
+              if (auth.cases.length > 1) ...[
+                const SizedBox(height: 32),
+                OutlinedButton.icon(
+                  onPressed: () async {
+                    // Find another open case
+                    final openCase = auth.cases.firstWhere(
+                      (c) => !c.isClosed && c.caseId != auth.caseId,
+                      orElse: () => auth.cases.first,
+                    );
+                    if (!openCase.isClosed) {
+                      await auth.switchToCase(openCase.caseId);
+                    }
+                  },
+                  icon: const Icon(Icons.swap_horiz),
+                  label: const Text('Switch to another case'),
+                ),
+              ],
+              const SizedBox(height: 16),
+              OutlinedButton.icon(
+                onPressed: () {
+                  Navigator.of(context).push(
+                    MaterialPageRoute(
+                      builder: (_) => const JoinScreen(isAddingCase: true),
+                    ),
+                  );
+                },
+                icon: const Icon(Icons.add),
+                label: const Text('Add new case'),
               ),
             ],
           ),
@@ -571,64 +813,13 @@ class _HomeScreenState extends State<HomeScreen> {
     String caseId,
     bool isSyncing,
   ) {
-    final symptoms = [
-      _SymptomButton(
-        icon: Icons.water_drop,
-        label: 'Waters breaking',
-        color: Colors.blue,
-        kind: 'waters_breaking',
-        severity: 'high',
-      ),
-      _SymptomButton(
-        icon: Icons.opacity,
-        label: 'Mucus plug',
-        color: Colors.amber,
-        kind: 'mucus_plug',
-        severity: 'medium',
-      ),
-      _SymptomButton(
-        icon: Icons.bloodtype,
-        label: 'Bleeding',
-        color: Colors.red,
-        kind: 'bleeding',
-        severity: 'high',
-      ),
-      _SymptomButton(
-        icon: Icons.child_care,
-        label: 'Reduced movement',
-        color: Colors.orange,
-        kind: 'reduced_fetal_movement',
-        severity: 'high',
-      ),
-      _SymptomButton(
-        icon: Icons.arrow_downward,
-        label: 'Belly lowering',
-        color: Colors.green,
-        kind: 'belly_lowering',
-        severity: 'low',
-      ),
-      _SymptomButton(
-        icon: Icons.sick,
-        label: 'Nausea',
-        color: Colors.lightGreen,
-        kind: 'nausea',
-        severity: 'low',
-      ),
-      _SymptomButton(
-        icon: Icons.visibility_off,
-        label: 'Vision issues',
-        color: Colors.deepOrange,
-        kind: 'headache_vision',
-        severity: 'high',
-      ),
-      _SymptomButton(
-        icon: Icons.thermostat,
-        label: 'Fever/chills',
-        color: Colors.deepPurple,
-        kind: 'fever_chills',
-        severity: 'high',
-      ),
-    ];
+    final auth = context.watch<AuthProvider>();
+    final l10n = AppLocalizations.of(context);
+
+    // Choose symptoms based on current mode
+    final symptoms = auth.postpartumActive
+        ? _getPostpartumSymptoms(l10n)
+        : _getLaborSymptoms(l10n);
 
     return GridView.builder(
       shrinkWrap: true,
@@ -645,6 +836,128 @@ class _HomeScreenState extends State<HomeScreen> {
         return _buildSymptomCard(context, caseId, symptom, isSyncing);
       },
     );
+  }
+
+  List<_SymptomButton> _getLaborSymptoms(AppLocalizations l10n) {
+    return [
+      _SymptomButton(
+        icon: Icons.water_drop,
+        label: l10n.watersBreaking,
+        color: Colors.blue,
+        kind: 'waters_breaking',
+        severity: 'high',
+      ),
+      _SymptomButton(
+        icon: Icons.opacity,
+        label: l10n.mucusPlug,
+        color: Colors.amber,
+        kind: 'mucus_plug',
+        severity: 'medium',
+      ),
+      _SymptomButton(
+        icon: Icons.bloodtype,
+        label: l10n.bleeding,
+        color: Colors.red,
+        kind: 'bleeding',
+        severity: 'high',
+      ),
+      _SymptomButton(
+        icon: Icons.child_care,
+        label: l10n.reducedMovement,
+        color: Colors.orange,
+        kind: 'reduced_fetal_movement',
+        severity: 'high',
+      ),
+      _SymptomButton(
+        icon: Icons.arrow_downward,
+        label: l10n.bellyLowering,
+        color: Colors.green,
+        kind: 'belly_lowering',
+        severity: 'low',
+      ),
+      _SymptomButton(
+        icon: Icons.sick,
+        label: l10n.nausea,
+        color: Colors.lightGreen,
+        kind: 'nausea',
+        severity: 'low',
+      ),
+      _SymptomButton(
+        icon: Icons.visibility_off,
+        label: l10n.visionIssues,
+        color: Colors.deepOrange,
+        kind: 'headache_vision',
+        severity: 'high',
+      ),
+      _SymptomButton(
+        icon: Icons.thermostat,
+        label: l10n.feverChills,
+        color: Colors.deepPurple,
+        kind: 'fever_chills',
+        severity: 'high',
+      ),
+    ];
+  }
+
+  List<_SymptomButton> _getPostpartumSymptoms(AppLocalizations l10n) {
+    return [
+      _SymptomButton(
+        icon: Icons.bloodtype,
+        label: l10n.heavyBleeding,
+        color: Colors.red,
+        kind: 'postpartum_bleeding',
+        severity: 'high',
+      ),
+      _SymptomButton(
+        icon: Icons.child_care,
+        label: l10n.breastfeedingIssues,
+        color: Colors.pink,
+        kind: 'breastfeeding_issues',
+        severity: 'medium',
+      ),
+      _SymptomButton(
+        icon: Icons.mood_bad,
+        label: l10n.moodChanges,
+        color: Colors.purple,
+        kind: 'mood_changes',
+        severity: 'medium',
+      ),
+      _SymptomButton(
+        icon: Icons.thermostat,
+        label: l10n.feverChills,
+        color: Colors.deepOrange,
+        kind: 'fever_chills',
+        severity: 'high',
+      ),
+      _SymptomButton(
+        icon: Icons.healing,
+        label: l10n.woundPain,
+        color: Colors.amber,
+        kind: 'wound_pain',
+        severity: 'medium',
+      ),
+      _SymptomButton(
+        icon: Icons.visibility_off,
+        label: l10n.visionIssues,
+        color: Colors.indigo,
+        kind: 'headache_vision',
+        severity: 'high',
+      ),
+      _SymptomButton(
+        icon: Icons.directions_walk,
+        label: l10n.legPainSwelling,
+        color: Colors.teal,
+        kind: 'leg_pain_swelling',
+        severity: 'high',
+      ),
+      _SymptomButton(
+        icon: Icons.local_hospital,
+        label: l10n.urinationIssues,
+        color: Colors.blue,
+        kind: 'urination_issues',
+        severity: 'medium',
+      ),
+    ];
   }
 
   Widget _buildSymptomCard(
@@ -726,6 +1039,456 @@ class _HomeScreenState extends State<HomeScreen> {
         ),
       );
     }
+
+    // Refresh events to get latest feedback
+    if (context.mounted) {
+      final events = context.read<EventsProvider>();
+      await events.fetchEvents(caseId);
+    }
+  }
+
+  Widget _buildMidwifeFeedbackSection(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
+    final events = context.watch<EventsProvider>();
+    final feedback = events.feedbackItems;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Divider(),
+        const SizedBox(height: 8),
+        Row(
+          children: [
+            const Icon(Icons.feedback, size: 20, color: Colors.indigo),
+            const SizedBox(width: 8),
+            Text(
+              l10n.midwifeFeedback,
+              style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+            ),
+            const Spacer(),
+            if (events.isLoading)
+              const SizedBox(
+                width: 16,
+                height: 16,
+                child: CircularProgressIndicator(strokeWidth: 2),
+              ),
+          ],
+        ),
+        const SizedBox(height: 12),
+        if (feedback.isEmpty)
+          Card(
+            color: Colors.grey.shade50,
+            child: Padding(
+              padding: const EdgeInsets.all(16),
+              child: Row(
+                children: [
+                  Icon(Icons.info_outline, color: Colors.grey.shade600),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Text(
+                      l10n.noFeedbackYet,
+                      style: TextStyle(color: Colors.grey.shade700),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          )
+        else
+          ...feedback.take(5).map((item) => _buildFeedbackCard(context, item)),
+      ],
+    );
+  }
+
+  Widget _buildFeedbackCard(BuildContext context, MidwifeFeedback feedback) {
+    final l10n = AppLocalizations.of(context);
+    final dateFormatter = DateFormat('MMM d, HH:mm');
+
+    // Determine status
+    final bool isResolved = feedback.resolved;
+    final bool isAcknowledged = feedback.acknowledged;
+    final bool hasReaction = feedback.reaction != null;
+
+    Color statusColor;
+    IconData statusIcon;
+    String statusText;
+
+    if (isResolved) {
+      statusColor = Colors.green;
+      statusIcon = Icons.check_circle;
+      statusText = l10n.resolved;
+    } else if (hasReaction) {
+      statusColor = Colors.blue;
+      statusIcon = Icons.thumb_up;
+      statusText = _getReactionLabel(feedback.reaction);
+    } else if (isAcknowledged) {
+      statusColor = Colors.blue;
+      statusIcon = Icons.visibility;
+      statusText = l10n.acknowledged;
+    } else {
+      statusColor = Colors.orange;
+      statusIcon = Icons.hourglass_empty;
+      statusText = l10n.pendingReview;
+    }
+
+    // Get readable symptom name
+    final symptomName = _getSymptomDisplayName(context, feedback.originalKind);
+
+    return Card(
+      margin: const EdgeInsets.only(bottom: 8),
+      child: Padding(
+        padding: const EdgeInsets.all(12),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Container(
+                  width: 8,
+                  height: 8,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    color: statusColor,
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    symptomName,
+                    style: const TextStyle(fontWeight: FontWeight.bold),
+                  ),
+                ),
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 8,
+                    vertical: 4,
+                  ),
+                  decoration: BoxDecoration(
+                    color: statusColor.withOpacity(0.1),
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: statusColor.withOpacity(0.3)),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(statusIcon, size: 14, color: statusColor),
+                      const SizedBox(width: 4),
+                      Text(
+                        statusText,
+                        style: TextStyle(
+                          fontSize: 11,
+                          color: statusColor,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 8),
+            Row(
+              children: [
+                Icon(Icons.schedule, size: 14, color: Colors.grey.shade600),
+                const SizedBox(width: 4),
+                Text(
+                  dateFormatter.format(feedback.originalTs),
+                  style: TextStyle(fontSize: 12, color: Colors.grey.shade600),
+                ),
+                if (feedback.reactionAt != null) ...[
+                  const SizedBox(width: 12),
+                  Icon(Icons.thumb_up, size: 14, color: Colors.blue.shade600),
+                  const SizedBox(width: 4),
+                  Text(
+                    dateFormatter.format(feedback.reactionAt!),
+                    style: TextStyle(fontSize: 12, color: Colors.blue.shade600),
+                  ),
+                ] else if (feedback.resolvedAt != null) ...[
+                  const SizedBox(width: 12),
+                  Icon(Icons.done_all, size: 14, color: Colors.green.shade600),
+                  const SizedBox(width: 4),
+                  Text(
+                    dateFormatter.format(feedback.resolvedAt!),
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: Colors.green.shade600,
+                    ),
+                  ),
+                ] else if (feedback.acknowledgedAt != null) ...[
+                  const SizedBox(width: 12),
+                  Icon(Icons.done, size: 14, color: Colors.blue.shade600),
+                  const SizedBox(width: 4),
+                  Text(
+                    dateFormatter.format(feedback.acknowledgedAt!),
+                    style: TextStyle(fontSize: 12, color: Colors.blue.shade600),
+                  ),
+                ],
+              ],
+            ),
+            if (hasReaction) ...[
+              const SizedBox(height: 8),
+              Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: Colors.blue.shade50,
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Row(
+                  children: [
+                    Text(
+                      _getReactionEmoji(feedback.reaction),
+                      style: const TextStyle(fontSize: 18),
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        _getReactionMessage(feedback.reaction, l10n),
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: Colors.blue.shade800,
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ] else if (isAcknowledged && !isResolved) ...[
+              const SizedBox(height: 8),
+              Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: Colors.blue.shade50,
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Row(
+                  children: [
+                    Icon(Icons.info, size: 16, color: Colors.blue.shade700),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        l10n.yourReportSeen,
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: Colors.blue.shade800,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+            if (isResolved) ...[
+              const SizedBox(height: 8),
+              Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: Colors.green.shade50,
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Row(
+                  children: [
+                    Icon(
+                      Icons.check_circle,
+                      size: 16,
+                      color: Colors.green.shade700,
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        l10n.midwifeResolved,
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: Colors.green.shade800,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+
+  String _getSymptomDisplayName(BuildContext context, String? kind) {
+    if (kind == null) return 'Unknown symptom';
+    final l10n = AppLocalizations.of(context);
+
+    switch (kind) {
+      case 'waters_breaking':
+        return l10n.watersBreaking;
+      case 'mucus_plug':
+        return l10n.mucusPlug;
+      case 'bleeding':
+        return l10n.bleeding;
+      case 'reduced_fetal_movement':
+        return l10n.reducedMovement;
+      case 'belly_lowering':
+        return l10n.bellyLowering;
+      case 'nausea':
+        return l10n.nausea;
+      case 'headache_vision':
+        return l10n.visionIssues;
+      case 'fever_chills':
+        return l10n.feverChills;
+      case 'postpartum_bleeding':
+        return l10n.heavyBleeding;
+      case 'breastfeeding_issues':
+        return l10n.breastfeedingIssues;
+      case 'mood_changes':
+        return l10n.moodChanges;
+      case 'wound_pain':
+        return l10n.woundPain;
+      case 'leg_pain_swelling':
+        return l10n.legPainSwelling;
+      case 'urination_issues':
+        return l10n.urinationIssues;
+      case 'HEAVY_BLEEDING':
+        return l10n.heavyBleeding;
+      default:
+        return kind.replaceAll('_', ' ');
+    }
+  }
+
+  String _getReactionLabel(String? reaction) {
+    switch (reaction) {
+      case 'ack':
+        return 'Acknowledged';
+      case 'coming':
+        return "I'm coming";
+      case 'ok':
+        return "It's OK";
+      case 'seen':
+        return 'Seen';
+      default:
+        return 'Acknowledged';
+    }
+  }
+
+  String _getReactionEmoji(String? reaction) {
+    switch (reaction) {
+      case 'ack':
+        return '✓';
+      case 'coming':
+        return '🚗';
+      case 'ok':
+        return '👍';
+      case 'seen':
+        return '👁';
+      default:
+        return '✓';
+    }
+  }
+
+  String _getReactionMessage(String? reaction, AppLocalizations l10n) {
+    switch (reaction) {
+      case 'ack':
+        return 'Midwife acknowledged your report';
+      case 'coming':
+        return 'Midwife is on the way';
+      case 'ok':
+        return 'Midwife says it\'s okay';
+      case 'seen':
+        return 'Midwife has reviewed';
+      default:
+        return 'Midwife responded';
+    }
+  }
+
+  Widget _buildMidwifeNotesSection(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
+    final events = context.watch<EventsProvider>();
+    final notes = events.midwifeNotes;
+    final dateFormatter = DateFormat('MMM d, HH:mm');
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Divider(),
+        const SizedBox(height: 8),
+        Row(
+          children: [
+            const Icon(Icons.note, size: 20, color: Colors.teal),
+            const SizedBox(width: 8),
+            Text(
+              l10n.midwifeNotes,
+              style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+            ),
+          ],
+        ),
+        const SizedBox(height: 12),
+        if (notes.isEmpty)
+          Card(
+            color: Colors.grey.shade50,
+            child: Padding(
+              padding: const EdgeInsets.all(16),
+              child: Row(
+                children: [
+                  Icon(Icons.info_outline, color: Colors.grey.shade600),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Text(
+                      l10n.noNotesYet,
+                      style: TextStyle(color: Colors.grey.shade700),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          )
+        else
+          ...notes
+              .take(5)
+              .map(
+                (note) => Card(
+                  margin: const EdgeInsets.only(bottom: 8),
+                  color: Colors.teal.shade50,
+                  child: Padding(
+                    padding: const EdgeInsets.all(12),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          children: [
+                            Icon(
+                              Icons.person,
+                              size: 16,
+                              color: Colors.teal.shade700,
+                            ),
+                            const SizedBox(width: 4),
+                            Text(
+                              l10n.fromMidwife,
+                              style: TextStyle(
+                                fontSize: 12,
+                                color: Colors.teal.shade700,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                            const Spacer(),
+                            Text(
+                              dateFormatter.format(DateTime.parse(note.ts)),
+                              style: TextStyle(
+                                fontSize: 11,
+                                color: Colors.teal.shade600,
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 8),
+                        Text(
+                          note.payload['text']?.toString() ?? '',
+                          style: const TextStyle(fontSize: 14),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+      ],
+    );
   }
 }
 

@@ -50,8 +50,21 @@ class CaseStatus {
   final String caseId;
   final String status;
   final bool claimed;
+  @JsonKey(name: 'labor_active')
+  final bool laborActive;
+  @JsonKey(name: 'postpartum_active')
+  final bool postpartumActive;
+  @JsonKey(name: 'closed_at')
+  final String? closedAt;
 
-  CaseStatus({required this.caseId, required this.status, required this.claimed});
+  CaseStatus({
+    required this.caseId,
+    required this.status,
+    required this.claimed,
+    this.laborActive = false,
+    this.postpartumActive = false,
+    this.closedAt,
+  });
 
   factory CaseStatus.fromJson(Map<String, dynamic> json) =>
       _$CaseStatusFromJson(json);

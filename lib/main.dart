@@ -5,6 +5,7 @@ import 'package:provider/provider.dart';
 import 'config/config.dart';
 import 'l10n/app_localizations.dart';
 import 'providers/auth_provider.dart';
+import 'providers/events_provider.dart';
 import 'providers/sync_provider.dart';
 import 'providers/websocket_provider.dart';
 import 'screens/home_screen.dart';
@@ -125,6 +126,9 @@ class _AppState extends State<App> with WidgetsBindingObserver {
         ),
         ChangeNotifierProvider(
           create: (_) => WebSocketProvider(apiClient: widget.apiClient),
+        ),
+        ChangeNotifierProvider(
+          create: (_) => EventsProvider(apiClient: widget.apiClient),
         ),
       ],
       child: Consumer<LanguageProvider>(
