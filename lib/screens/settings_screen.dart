@@ -1,4 +1,7 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
+import '../providers/auth_provider.dart';
+import '../services/api_client.dart';
 import '../services/biometric_auth_service.dart';
 
 class SettingsScreen extends StatefulWidget {
@@ -116,6 +119,114 @@ class _SettingsScreenState extends State<SettingsScreen> {
     }
   }
 
+  Future<void> _pairWithMidwife() async {
+    final joinCodeController = TextEditingController();
+
+    final result = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Pair with Midwife'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Text('Enter the join code from your midwife'),
+            const SizedBox(height: 16),
+            TextField(
+              controller: joinCodeController,
+              decoration: const InputDecoration(
+                labelText: 'Join Code (6 characters)',
+                border: OutlineInputBorder(),
+              ),
+              maxLength: 6,
+              textCapitalization: TextCapitalization.characters,
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () async {
+              final code = joinCodeController.text.trim().toUpperCase();
+              if (code.length != 6) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text('Join code must be 6 characters')),
+                );
+                return;
+              }
+              Navigator.pop(context, true);
+            },
+            child: const Text('Pair'),
+          ),
+        ],
+      ),
+    );
+
+    if (result == true && mounted) {
+      final code = joinCodeController.text.trim().toUpperCase();
+      final auth = context.read<AuthProvider>();
+      final apiClient = context.read<ApiClient>();
+
+      try {
+        await apiClient.pairMidwife(auth.caseId!, code);
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Successfully paired with midwife!')),
+          );
+        }
+      } catch (e) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Failed to pair: $e')),
+          );
+        }
+      }
+    }
+  }
+
+  Future<void> _unpairMidwife() async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Unpair Midwife'),
+        content: const Text('Are you sure you want to unpair from your midwife?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(context, true),
+            style: TextButton.styleFrom(foregroundColor: Colors.red),
+            child: const Text('Unpair'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed == true && mounted) {
+      final auth = context.read<AuthProvider>();
+      final apiClient = context.read<ApiClient>();
+
+      try {
+        await apiClient.unpairMidwife(auth.caseId!);
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Unpaired from midwife')),
+          );
+        }
+      } catch (e) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Failed to unpair: $e')),
+          );
+        }
+      }
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -128,6 +239,59 @@ class _SettingsScreenState extends State<SettingsScreen> {
           : ListView(
               padding: const EdgeInsets.all(16),
               children: [
+                // Midwife Pairing Section
+                Card(
+                  child: Padding(
+                    padding: const EdgeInsets.all(16),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'Midwife Pairing',
+                          style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                        const SizedBox(height: 8),
+                        Text(
+                          'Pair your case with a midwife to receive professional support',
+                          style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                            color: Colors.grey[600],
+                          ),
+                        ),
+                        const SizedBox(height: 16),
+                        Row(
+                          children: [
+                            Expanded(
+                              child: ElevatedButton.icon(
+                                onPressed: _pairWithMidwife,
+                                icon: const Icon(Icons.qr_code_scanner),
+                                label: const Text('Pair with Midwife'),
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 8),
+                        Row(
+                          children: [
+                            Expanded(
+                              child: OutlinedButton.icon(
+                                onPressed: _unpairMidwife,
+                                icon: const Icon(Icons.link_off),
+                                label: const Text('Unpair Midwife'),
+                                style: OutlinedButton.styleFrom(
+                                  foregroundColor: Colors.red,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 16),
+                
                 // Biometric Authentication Section
                 Card(
                   child: Padding(

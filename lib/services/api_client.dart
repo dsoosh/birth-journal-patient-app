@@ -97,4 +97,30 @@ class ApiClient {
     }
     throw Exception('Events fetch failed: ${response.statusCode}');
   }
+
+  Future<void> pairMidwife(String caseId, String joinCode) async {
+    final response = await http.post(
+      Uri.parse('$baseUrl/cases/$caseId/pair'),
+      headers: _headers,
+      body: jsonEncode({'join_code': joinCode}),
+    );
+
+    if (response.statusCode != 200) {
+      final error = response.statusCode == 404
+          ? 'Invalid join code'
+          : 'Pairing failed: ${response.statusCode}';
+      throw Exception(error);
+    }
+  }
+
+  Future<void> unpairMidwife(String caseId) async {
+    final response = await http.post(
+      Uri.parse('$baseUrl/cases/$caseId/unpair'),
+      headers: _headers,
+    );
+
+    if (response.statusCode != 200) {
+      throw Exception('Unpairing failed: ${response.statusCode}');
+    }
+  }
 }
